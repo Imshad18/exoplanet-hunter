@@ -1,5 +1,9 @@
 """NASA Exoplanet Archive (TAP) queries: known planets, TOIs, candidate lists."""
+import csv
+import io
 import random
+import time
+from pathlib import Path
 
 import requests
 
@@ -68,7 +72,27 @@ def _period_relation(p_found, p_known, tol=0.01):
     return None
 
 
-def cross_match(period, planets, tois):
+CTOI_URL = "https://exofop.ipac.caltech.edu/tess/download_ctoi.php?sort=ctoi&output=csv"
+CACHE = Path(__file__).resolve().parent.parent / "cache"
+
+
+def known_ctois(tic):
+    """Community TOIs (ExoFOP) on this star. The full list is cached for a day."""
+    path = CACHE / "ctoi.csv"
+    try:
+        if not path.exists() or time.time() - path.stat().st_mtime > 86400:
+            r = requests.get(CTOI_URL, timeout=60, headers={"User-Agent": "Mozilla/5.0"})
+            r.raise_for_status()
+            CACHE.mkdir(exist_ok=True)
+            path.write_text(r.text)
+        rows = csv.DictReader(io.StringIO(path.read_text()))
+        return [{"ctoi": row["CTOI"], "period": float(row["Period (days)"] or 0), "toi": row["Promoted to TOI"],
+                 "user": row["User"], "paper": row["Paper"]} for row in rows if row["TIC ID"] == str(int(tic))]
+    except Exception:
+        return []
+
+
+def cross_match(period, planets, tois, ctois=()):
     """Match a detected period against confirmed planets, then TOIs; exact periods beat harmonics."""
     for want_exact in (True, False):
         for p in planets:
@@ -83,4 +107,9 @@ def cross_match(period, planets, tois):
                 return {"kind": "toi", "name": f"TOI-{t['toi']}", "period": t["pl_orbper"],
                         "relation": rel, "disposition": disp,
                         "disposition_text": TFOP_DISPOSITIONS.get(disp, disp or "Unknown")}
+        for c in ctois:
+            rel = _period_relation(period, c.get("period"))
+            if rel and (rel == "1") == want_exact:
+                return {"kind": "ctoi", "name": f"CTOI {c['ctoi']}", "period": c["period"], "relation": rel,
+                        "disposition_text": "Community TOI" + (f", promoted to TOI-{c['toi']}" if c["toi"] else "")}
     return {"kind": "none"}

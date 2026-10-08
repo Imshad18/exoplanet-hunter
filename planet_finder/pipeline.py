@@ -95,11 +95,14 @@ def run(target, options=None, progress=None, cancel=None):
     star["input"] = target
     planets = archive.known_planets(tic)
     tois = archive.known_tois(tic)
+    ctois = archive.known_ctois(tic)
     known_msg = []
     if planets:
         known_msg.append(f"{len(planets)} confirmed planet(s): " + ", ".join(p["pl_name"] for p in planets))
     if tois:
         known_msg.append(f"{len(tois)} TOI(s): " + ", ".join(f"TOI-{t['toi']}" for t in tois))
+    if ctois:
+        known_msg.append(f"{len(ctois)} community TOI(s): " + ", ".join(f"CTOI {c['ctoi']}" for c in ctois))
     step("resolve", 8, "NASA Exoplanet Archive: " + ("; ".join(known_msg) if known_msg else "nothing known about this star."))
 
     # 2. Data -----------------------------------------------------------------
@@ -236,7 +239,7 @@ def run(target, options=None, progress=None, cancel=None):
         cand["physical"] = vetting.physical(star, P, depth, dur)
         cand["rp_err"] = cand["physical"]["rp_re"] * 0.5 * derr / depth
         cand["tests"] = vetting.run_tests(cand, star, season_rows, transits, len(seasons))
-        cand["match"] = archive.cross_match(P, planets, tois)
+        cand["match"] = archive.cross_match(P, planets, tois, ctois)
         cand["verdict"] = vetting.verdict(cand["tests"], cand["match"])
         cand["transits"] = transits
         cand["seasons"] = season_rows
@@ -266,7 +269,7 @@ def run(target, options=None, progress=None, cancel=None):
         "created": datetime.now().isoformat(timespec="seconds"),
         "target": star,
         "options": opts,
-        "known": {"planets": planets, "tois": tois},
+        "known": {"planets": planets, "tois": tois, "ctois": ctois},
         "data": {
             "sectors": [{"sector": c["sector"], "author": c["author"], "exptime": c["exptime"],
                          "season": c["season"], "points": int(len(c["t"])),

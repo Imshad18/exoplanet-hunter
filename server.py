@@ -12,11 +12,11 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from planet_finder import archive, pipeline
+from planet_finder import archive, contribute, pipeline, zenodo
 
 ROOT = Path(__file__).resolve().parent
 app = FastAPI(title="Exoplanet Hunter")
@@ -149,6 +149,66 @@ def toi_candidates(n: int = 24):
         return archive.candidate_tois(n)
     except Exception as exc:
         raise HTTPException(502, f"NASA Exoplanet Archive unavailable: {exc}")
+
+
+# ------------------------------------------------------------------ contribution
+class Author(BaseModel):
+    name: str = ""
+    affiliation: str = ""
+    email: str = ""
+    orcid: str = ""
+
+
+class ZenodoReq(BaseModel):
+    author: Author
+    token: str
+    sandbox: bool = True
+
+
+class PublishReq(BaseModel):
+    id: int
+    token: str
+    sandbox: bool = True
+
+
+def _result(name):
+    p = pipeline.RESULTS_DIR / Path(name).name
+    if not p.exists():
+        raise HTTPException(404)
+    return json.loads(p.read_text())
+
+
+@app.get("/api/contrib/{name}/{cid}/checks")
+def contrib_checks(name: str, cid: int):
+    res = _result(name)
+    return contribute.checks(res, contribute._cand(res, cid))
+
+
+@app.post("/api/contrib/{name}/{cid}/package")
+def contrib_package(name: str, cid: int, author: Author):
+    res = _result(name)
+    data, _ = contribute.package(res, cid, author.model_dump())
+    fn = f"TIC{res['target']['tic']}_{cid:02d}_candidate.zip"
+    return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{fn}"'})
+
+
+@app.post("/api/contrib/{name}/{cid}/zenodo")
+def contrib_zenodo(name: str, cid: int, req: ZenodoReq):
+    res = _result(name)
+    data, _ = contribute.package(res, cid, req.author.model_dump())
+    meta = contribute.zenodo_metadata(res, cid, req.author.model_dump(), zenodo.creator(req.author.model_dump()))
+    try:
+        return zenodo.draft({f"TIC{res['target']['tic']}_{cid:02d}_candidate.zip": data}, meta, req.token, req.sandbox)
+    except Exception as exc:
+        raise HTTPException(502, str(exc))
+
+
+@app.post("/api/zenodo-publish")
+def zenodo_publish(req: PublishReq):
+    try:
+        return zenodo.publish(req.id, req.token, req.sandbox)
+    except Exception as exc:
+        raise HTTPException(502, str(exc))
 
 
 app.mount("/", StaticFiles(directory=ROOT / "web", html=True), name="web")

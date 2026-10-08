@@ -326,6 +326,8 @@ function renderCandidate() {
         <p class="disclaimer">Automated vetting score. A signal is only a confirmed planet after independent follow-up (spectroscopy, high-resolution imaging, ground-based photometry) — this tool tells you which signals deserve that effort.</p></div>
     </div>
 
+    <div id="contrib"></div>
+
     <div class="metrics">
       ${metric("Period", fmt(c.period, 5) + " d", "± " + fmt(c.period_err * 86400, 0) + " s")}
       ${metric("Planet radius", fmt(ph.rp_re, 2) + " R⊕", "± " + fmt(c.rp_err, 2) + " · " + fmt(ph.rp_rj, 3) + " RJ")}
@@ -371,6 +373,7 @@ function renderCandidate() {
     </div>
   </div>`;
 
+  renderContrib(r, c);
   const col = CAND_COLORS[state.cand % 6], hw = c.duration_h / 2, d = c.depth;
   const fold = c.plots.fold;
   const lo = Math.min(...fold.x), hi = Math.max(...fold.x);
@@ -407,6 +410,75 @@ function renderCandidate() {
     shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: { color: css("--muted"), dash: "dot" } }] }), plotCfg);
   Plotly.react("plotZoom", [{ type: "scatter", mode: "lines", x: c.plots.zoom.period, y: c.plots.zoom.power, line: { color: col, width: 1 } }],
     layoutBase({ xaxis: { title: "Period (d)", tickformat: ".5f" }, yaxis: { title: "ΔlogL" } }), plotCfg);
+}
+
+/* ---------- contribute ---------- */
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+async function renderContrib(r, c) {
+  const box = $("#contrib");
+  box.innerHTML = `<div class="card"><div class="panel-title"><h3>Contribute</h3><span>checking ExoFOP readiness…</span></div></div>`;
+  const chk = await api(`/api/contrib/${encodeURIComponent(r.file)}/${c.id}/checks`).catch(() => null);
+  if (!chk || state.result !== r || r.candidates[state.cand] !== c) return;
+  const a = lsGet("author", {}), z = lsGet("zenodo", { sandbox: true });
+  const icon = { pass: "✓", warn: "!", fail: "✕", info: "i" };
+  const tone = chk.verdict.tone === "pass" ? "new" : chk.verdict.tone === "known" ? "known" : "fail";
+  box.innerHTML = `
+  <div class="card">
+    <div class="panel-title"><h3>Contribute</h3><span class="tone-${tone}">${esc(chk.verdict.label)}</span></div>
+    <div class="grid-2">
+      <div>
+        <p class="muted" style="margin-top:0">${esc(chk.verdict.text)}</p>
+        <table class="tests">${chk.checks.map((x) => `<tr><td class="ic"><span class="dot ${x.status}">${icon[x.status]}</span></td>
+          <td><div class="nm">${esc(x.name)}</div><div class="dt">${esc(x.detail)}</div></td><td class="vl">${esc(x.value)}</td></tr>`).join("")}</table>
+      </div>
+      <div class="csteps">
+        <div class="cstep"><h4>1. Your details</h4><div class="author">
+          <input id="auName" placeholder="Your name" value="${esc(a.name || "")}"><input id="auAff" placeholder="Affiliation or Independent" value="${esc(a.affiliation || "")}">
+          <input id="auEmail" placeholder="Email" value="${esc(a.email || "")}"><input id="auOrcid" placeholder="ORCID (get one free at orcid.org)" value="${esc(a.orcid || "")}"></div></div>
+        <div class="cstep"><h4>2. Download the write-up package</h4><p>A Research Note draft (AASTeX, compiles on Overleaf) with a figure, an ExoFOP parameter sheet with their column names, and the folded light curve.</p>
+          <div class="row"><button class="btn primary" id="cPkg">Download package</button><span id="cPkgNote" class="muted"></span></div></div>
+        <div class="cstep"><h4>3. Timestamp it on Zenodo</h4><p>A DOI under your name records that you found it, today. Token: <a target="_blank" rel="noopener" href="https://zenodo.org/account/settings/applications/tokens/new/">Zenodo → Applications</a> (deposit:write, deposit:actions).</p>
+          <div class="row"><input id="zToken" type="password" placeholder="Zenodo token" style="flex:1;min-width:150px" value="${esc(z.token || "")}"><label class="muted"><input type="checkbox" id="zSandbox" ${z.sandbox !== false ? "checked" : ""}> sandbox</label><button class="btn" id="cZen">Upload</button></div>
+          <div id="cZenNote" class="muted" style="margin-top:6px"></div></div>
+        <div class="cstep"><h4>4. Publish a Research Note of the AAS</h4><p>Short (up to 1,000 words, one figure), citable and indexed in ADS. ExoFOP accepts community candidates once they appear in RNAAS or a refereed journal.</p>
+          <div class="row"><a class="btn" target="_blank" rel="noopener" href="https://www.overleaf.com/project">Open Overleaf ↗</a><a class="btn" target="_blank" rel="noopener" href="https://journals.aas.org/research-notes/">RNAAS ↗</a></div></div>
+        <div class="cstep"><h4>5. Submit it to ExoFOP as a community TOI</h4><p>Request upload rights, then create the candidate with the parameter sheet, attach the figure to the TIC page with the same tag, and link the note. The TESS team reviews CTOIs for promotion to TOIs and ground-based follow-up.</p>
+          <div class="row"><a class="btn" target="_blank" rel="noopener" href="https://exofop.ipac.caltech.edu/tess/pub_candidate_upload_request.php">Request upload rights ↗</a>
+            <a class="btn" target="_blank" rel="noopener" href="https://exofop.ipac.caltech.edu/tess/target.php?id=${r.target.tic}">TIC ${r.target.tic} on ExoFOP ↗</a>
+            <a class="btn" target="_blank" rel="noopener" href="https://exofop.ipac.caltech.edu/tess/candidate_help.php">Guidelines ↗</a></div></div>
+        <div class="cstep"><h4>6. Get it observed</h4><p>Share the ephemeris below with amateur transit observers, or join citizen-science projects where volunteer-found planets have been confirmed with finders credited.</p>
+          <div class="row"><a class="btn" target="_blank" rel="noopener" href="https://www.zooniverse.org/projects/nora-dot-eisner/planet-hunters-tess">Planet Hunters TESS ↗</a>
+            <a class="btn" target="_blank" rel="noopener" href="https://exoplanets.nasa.gov/exoplanet-watch/">NASA Exoplanet Watch ↗</a></div></div>
+      </div>
+    </div>
+  </div>`;
+  const readAuthor = () => { const v = { name: $("#auName").value.trim(), affiliation: $("#auAff").value.trim(), email: $("#auEmail").value.trim(), orcid: $("#auOrcid").value.trim() }; lsSet("author", v); return v; };
+  const readZ = () => { const v = { token: $("#zToken").value.trim(), sandbox: $("#zSandbox").checked }; lsSet("zenodo", v); return v; };
+  for (const id of ["#auName", "#auAff", "#auEmail", "#auOrcid"]) $(id).onchange = readAuthor;
+  $("#zToken").onchange = readZ; $("#zSandbox").onchange = readZ;
+  $("#cPkg").onclick = async () => {
+    $("#cPkgNote").textContent = "Building…";
+    const res = await fetch(`/api/contrib/${encodeURIComponent(r.file)}/${c.id}/package`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(readAuthor()) });
+    const el = document.createElement("a"); el.href = URL.createObjectURL(await res.blob()); el.download = `TIC${r.target.tic}_${String(c.id).padStart(2, "0")}_candidate.zip`; el.click();
+    $("#cPkgNote").textContent = "Downloaded.";
+  };
+  $("#cZen").onclick = async () => {
+    const zz = readZ(), au = readAuthor(), note = $("#cZenNote");
+    if (!zz.token) { note.textContent = "Paste a Zenodo token first."; return; }
+    if (!au.name) { note.textContent = "Enter your name in step 1."; return; }
+    note.textContent = "Uploading…";
+    try {
+      const d = await api(`/api/contrib/${encodeURIComponent(r.file)}/${c.id}/zenodo`, { method: "POST", body: JSON.stringify({ author: au, token: zz.token, sandbox: zz.sandbox }) });
+      note.innerHTML = `Draft ready${d.doi ? `, DOI ${esc(d.doi)}` : ""}. <a target="_blank" rel="noopener" href="${esc(d.html)}">Review ↗</a> <button class="btn small" id="cPub">Publish</button>`;
+      $("#cPub").onclick = async () => {
+        if (!confirm(`Publish on ${zz.sandbox ? "the Zenodo TEST server" : "Zenodo"}? Published records and DOIs are permanent.`)) return;
+        try { const p = await api("/api/zenodo-publish", { method: "POST", body: JSON.stringify({ id: d.id, token: zz.token, sandbox: zz.sandbox }) });
+          note.innerHTML = `<span class="tone-new">Published: <a target="_blank" rel="noopener" href="${esc(p.url)}">${esc(p.doi)}</a></span>`; }
+        catch (e) { note.innerHTML = `<span class="tone-fail">${esc(e.message)}</span>`; }
+      };
+    } catch (e) { note.innerHTML = `<span class="tone-fail">${esc(e.message)}</span>`; }
+  };
 }
 
 function yRange(by, d) {

@@ -30,6 +30,18 @@ Command line:
    duration vs. stellar density, per-season recheck
 6. Cross-match against confirmed planets and TOIs
 
+## Contributing a candidate
+
+Each signal has a Contribute panel:
+
+1. ExoFOP readiness checks: not a known planet, TOI or community TOI (including harmonics), vetting passed,
+   period/epoch/depth/duration all measured, SNR, multi-season detection, contamination.
+2. Package download: a Research Note of the AAS draft (AASTeX) with figure, an ExoFOP parameter sheet using
+   ExoFOP's column names, the folded light curve and the full candidate data.
+3. Zenodo upload for a DOI that timestamps the finding.
+4. Links for the RNAAS submission and the ExoFOP community-candidate upload (ExoFOP requires the candidate to
+   be published first), plus citizen-science follow-up projects.
+
 ## Tested on
 
 | Star | Result |

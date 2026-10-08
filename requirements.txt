@@ -4,5 +4,6 @@ astroquery
 numpy
 scipy
 requests
+matplotlib
 fastapi
 uvicorn[standard]

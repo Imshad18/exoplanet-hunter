@@ -251,6 +251,9 @@ def verdict(tests, match):
     elif fails:
         label, tone = "Likely false positive", "fail"
         text = "Failed: " + ", ".join(t["name"] for t in fails) + "."
+    elif match["kind"] == "ctoi":
+        label, tone = "Known community candidate", "known"
+        text = f"Matches {match['name']} ({match['disposition_text']}), already submitted to ExoFOP by another observer."
     elif match["kind"] == "toi":
         label, tone = "Known TOI recovered", "known"
         text = (f"Matches {match['name']} ({match['disposition_text']}). "
