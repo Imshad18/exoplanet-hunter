@@ -1,0 +1,8 @@
+lightkurve>=2.5
+astropy>=6.0
+astroquery
+numpy
+scipy
+requests
+fastapi
+uvicorn[standard]

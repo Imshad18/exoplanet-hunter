@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exoplanet Hunter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/plotly.min.js"></script>
+</head>
+<body>
+  <canvas id="stars"></canvas>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" class="logo"><circle cx="16" cy="16" r="7" fill="url(#g)"/><ellipse cx="16" cy="16" rx="14" ry="5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".6" transform="rotate(-20 16 16)"/><circle cx="28.5" cy="11.6" r="2" fill="#0b1220" stroke="currentColor"/><defs><radialGradient id="g"><stop offset="0" stop-color="#fff6d8"/><stop offset="1" stop-color="#ffb347"/></radialGradient></defs></svg>
+      <div>
+        <h1>Exoplanet Hunter</h1>
+        <p>TESS transit search · automated vetting · multi-year recheck</p>
+      </div>
+    </div>
+    <nav>
+      <span class="pill" id="queueBadge">Idle</span>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="card">
+        <h2>Hunt a star</h2>
+        <form id="searchForm" class="search">
+          <input id="targetInput" placeholder="TIC 307210830 · TOI-700 · Pi Men" autocomplete="off" required>
+          <button type="submit" class="btn primary">Search</button>
+        </form>
+        <div class="chips" id="quickTargets"></div>
+        <details class="advanced">
+          <summary>Search settings</summary>
+          <div class="grid2">
+            <label>Min period (d)<input type="number" step="0.1" id="optPmin" value="0.5"></label>
+            <label>Max period (d)<input type="number" step="1" id="optPmax" value="20"></label>
+            <label>Max planets<input type="number" min="1" max="6" id="optNp" value="3"></label>
+            <label>SDE threshold<input type="number" step="0.5" id="optSde" value="7"></label>
+            <label>Detrend window (d)<input type="number" step="0.1" id="optWin" value="1.0"></label>
+            <label>Max sectors (0 = all)<input type="number" min="0" id="optSec" value="0"></label>
+          </div>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>Recheck unconfirmed TOIs</h2>
+        <p class="muted">Pull bright TESS planet candidates (disposition PC) from the NASA Exoplanet Archive and re-run them through the pipeline.</p>
+        <button class="btn" id="loadTois">Load candidates</button>
+        <div id="toiList" class="toi-list"></div>
+      </section>
+
+      <section class="card">
+        <h2>Batch survey</h2>
+        <textarea id="batchInput" rows="4" placeholder="One star per line&#10;TIC 261136679&#10;TOI-270&#10;LHS 3844"></textarea>
+        <button class="btn" id="batchRun">Queue all</button>
+      </section>
+
+      <section class="card">
+        <h2>Queue</h2>
+        <div id="jobList" class="list"><p class="muted">No jobs yet.</p></div>
+      </section>
+
+      <section class="card">
+        <h2>Saved reports</h2>
+        <div id="resultList" class="list"><p class="muted">None yet.</p></div>
+      </section>
+    </aside>
+
+    <main id="main">
+      <div id="emptyView" class="empty">
+        <div class="empty-orbit"><div class="sun"></div><div class="ring"><div class="planet"></div></div></div>
+        <h2>Find planets hiding in public NASA data</h2>
+        <p>Enter any star. The pipeline downloads every TESS sector ever observed for it, removes stellar
+           variability, searches for repeating dips, then tries hard to prove each signal <em>isn't</em> a planet:
+           odd/even depths, secondary eclipses, single-event artifacts, stellar-density consistency — and
+           re-checks the same dip independently in every year TESS looked. Survivors are cross-matched against the
+           NASA Exoplanet Archive to tell you whether they're already known.</p>
+        <ol class="howto">
+          <li><b>Download</b> SPOC / TESS-SPOC / QLP light curves from MAST</li>
+          <li><b>Search</b> stacked Box-Least-Squares across observing seasons</li>
+          <li><b>Vet</b> 12 false-positive tests + per-season recheck</li>
+          <li><b>Match</b> confirmed planets & TOIs in the Exoplanet Archive</li>
+        </ol>
+      </div>
+
+      <div id="runView" class="hidden">
+        <div class="card run-card">
+          <div class="run-head">
+            <div>
+              <div class="eyebrow">Running pipeline</div>
+              <h2 id="runTitle">—</h2>
+            </div>
+            <button class="btn ghost" id="cancelBtn">Cancel</button>
+          </div>
+          <div class="steps" id="steps"></div>
+          <div class="bar"><div id="runBar"></div></div>
+          <pre id="runLog" class="console"></pre>
+        </div>
+      </div>
+
+      <div id="resultView" class="hidden"></div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
