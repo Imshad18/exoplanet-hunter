@@ -2,14 +2,27 @@
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (v, d = 2) => (v === null || v === undefined || !isFinite(v) ? "—" : Number(v).toFixed(d));
-const SEASON_COLORS = ["#6cb6ff", "#ffc163", "#3fd68f", "#ff7eb6", "#c792ff", "#ff8a65", "#56d4dd", "#d4e157"];
-const CAND_COLORS = ["#c792ff", "#3fd68f", "#ff7eb6", "#ffc163", "#56d4dd", "#ff8a65"];
+const SEASON_COLORS = ["#4e79a7", "#e15759", "#59a14f", "#b07aa1", "#f28e2b", "#76b7b2", "#9c755f", "#edc948"];
+const CAND_COLORS = ["#d4661a", "#4e79a7", "#59a14f", "#b07aa1", "#e15759", "#76b7b2"];
 const BTJD = 2457000;
 const STEPS = [["resolve", "Target"], ["download", "Download"], ["detrend", "Detrend"], ["search", "Search"],
                ["refine", "Refine"], ["vet", "Vet & recheck"], ["done", "Report"]];
 const QUICK = ["TOI-700", "Pi Men", "TOI-270", "LHS 3844", "TOI-1452", "WASP-18", "TIC 307210830"];
 
 const state = { activeJob: null, result: null, cand: 0, jobs: [], orbitRAF: null };
+
+/* ---------- theme ---------- */
+function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("theme"); } catch {}
+  if (saved) document.documentElement.dataset.theme = saved;
+  $("#themeBtn").onclick = () => {
+    const dark = css("--bg") === "#111214";
+    document.documentElement.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("theme", document.documentElement.dataset.theme); } catch {}
+    if (state.result && !$("#resultView").classList.contains("hidden")) renderResult();
+  };
+}
 
 /* ---------- api ---------- */
 async function api(path, opts = {}) {
@@ -135,12 +148,13 @@ async function openResult(file) {
 }
 
 const btjdToDate = (t) => new Date((t + BTJD - 2440587.5) * 86400000);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const layoutBase = (extra = {}) => ({
   paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-  font: { color: "#8a9bb5", family: "JetBrains Mono", size: 11 },
+  font: { color: css("--muted"), family: "IBM Plex Mono", size: 11 },
   margin: { l: 58, r: 12, t: 8, b: 38 }, showlegend: false, hovermode: "closest",
-  xaxis: { gridcolor: "#16233a", zerolinecolor: "#22324f", ...(extra.xaxis || {}) },
-  yaxis: { gridcolor: "#16233a", zerolinecolor: "#22324f", ...(extra.yaxis || {}) },
+  xaxis: { gridcolor: css("--grid"), zerolinecolor: css("--zero"), linecolor: css("--line-2"), ...(extra.xaxis || {}) },
+  yaxis: { gridcolor: css("--grid"), zerolinecolor: css("--zero"), linecolor: css("--line-2"), ...(extra.yaxis || {}) },
   ...Object.fromEntries(Object.entries(extra).filter(([k]) => !["xaxis", "yaxis"].includes(k))),
 });
 const plotCfg = { displaylogo: false, responsive: true, modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"] };
@@ -258,7 +272,7 @@ function renderFlat(season = renderFlat.season ?? "all") {
   const s = season === "all" ? null : seasons.find((x) => x.id === season);
   const idx = fl.t.map((t, i) => i).filter((i) => !s || (fl.t[i] >= s.t0 - 1 && fl.t[i] <= s.t1 + 1));
   const traces = [{ type: "scattergl", mode: "markers", x: idx.map((i) => btjdToDate(fl.t[i])), y: idx.map((i) => fl.f[i]),
-    marker: { size: 2.5, color: "#5a6f92" }, hoverinfo: "skip" }];
+    marker: { size: 2.5, color: css("--point") }, hoverinfo: "skip" }];
   r.candidates.forEach((c, k) => {
     const hw = c.duration_h / 48;
     const inT = idx.filter((i) => { const ph = (((fl.t[i] - c.t0) % c.period) + c.period) % c.period; return ph < hw || ph > c.period - hw; });
@@ -276,8 +290,8 @@ function renderPeriodograms(k) {
   $("#pgTabs").onclick = (e) => { if (e.target.dataset.k) renderPeriodograms(+e.target.dataset.k); };
   const p = pgs[k];
   const shapes = [1, 2, 0.5, 3, 1 / 3].map((h) => ({ type: "line", x0: p.best * h, x1: p.best * h, yref: "paper", y0: 0, y1: 1,
-    line: { color: h === 1 ? "#c792ff" : "#c792ff55", width: h === 1 ? 1.5 : 1, dash: h === 1 ? "solid" : "dot" } }));
-  Plotly.react("plotPg", [{ type: "scattergl", mode: "lines", x: p.period, y: p.power, line: { color: "#6cb6ff", width: 1 },
+    line: { color: CAND_COLORS[0], width: 1, dash: h === 1 ? "solid" : "dot" } }));
+  Plotly.react("plotPg", [{ type: "scattergl", mode: "lines", x: p.period, y: p.power, line: { color: css("--text"), width: 1 },
     hovertemplate: "P = %{x:.4f} d<br>ΔlogL = %{y:.1f}<extra></extra>" }],
     layoutBase({ shapes, xaxis: { type: "log", title: "Period (days)" }, yaxis: { title: "Stacked ΔlogL" } }), plotCfg);
 }
@@ -361,15 +375,15 @@ function renderCandidate() {
   const fold = c.plots.fold;
   const lo = Math.min(...fold.x), hi = Math.max(...fold.x);
   Plotly.react("plotFold", [
-    { type: "scattergl", mode: "markers", x: fold.x, y: fold.y, marker: { size: 2.5, color: "#4d6185", opacity: .6 }, hoverinfo: "skip" },
+    { type: "scattergl", mode: "markers", x: fold.x, y: fold.y, marker: { size: 2.5, color: css("--point"), opacity: .5 }, hoverinfo: "skip" },
     { type: "scatter", mode: "markers", x: fold.bx, y: fold.by, marker: { size: 6, color: col }, hovertemplate: "%{x:.2f} h<br>%{y:.6f}<extra></extra>" },
-    { type: "scatter", mode: "lines", x: [lo, -hw, -hw, hw, hw, hi], y: [1, 1, 1 - d, 1 - d, 1, 1], line: { color: "#ffc163", width: 1.5, shape: "linear" }, hoverinfo: "skip" },
+    { type: "scatter", mode: "lines", x: [lo, -hw, -hw, hw, hw, hi], y: [1, 1, 1 - d, 1 - d, 1, 1], line: { color: css("--text"), width: 1.2, shape: "linear" }, hoverinfo: "skip" },
   ], layoutBase({ xaxis: { title: "Hours from mid-transit" }, yaxis: { title: "Relative flux", range: yRange(fold.by, d) } }), plotCfg);
 
   const tr = c.transits, seasonOf = (t) => (r.data.seasons.find((s) => t >= s.t0 - 1 && t <= s.t1 + 1) || { id: 0 }).id;
   Plotly.react("plotTransits", [
     { type: "scatter", mode: "markers", x: tr.map((x) => btjdToDate(x.t)), y: tr.map((x) => x.depth * 1e6),
-      error_y: { type: "data", array: tr.map((x) => x.err * 1e6), color: "#3a4d70", thickness: 1 },
+      error_y: { type: "data", array: tr.map((x) => x.err * 1e6), color: css("--line-2"), thickness: 1 },
       marker: { size: 7, color: tr.map((x) => SEASON_COLORS[seasonOf(x.t) % 8]) },
       hovertemplate: "%{x|%Y-%m-%d}<br>%{y:.0f} ppm<extra></extra>" },
   ], layoutBase({ yaxis: { title: "Transit depth (ppm)", zeroline: true },
@@ -378,19 +392,19 @@ function renderCandidate() {
 
   c.seasons.forEach((s, i) => Plotly.react(`sfold${i}`, [
     { type: "scatter", mode: "markers", x: s.fold.x, y: s.fold.y, marker: { size: 4, color: SEASON_COLORS[s.season % 8] }, hoverinfo: "skip" },
-    { type: "scatter", mode: "lines", x: [-hw * 3, -hw, -hw, hw, hw, hw * 3], y: [1, 1, 1 - d, 1 - d, 1, 1], line: { color: "#ffffff55", width: 1 }, hoverinfo: "skip" },
+    { type: "scatter", mode: "lines", x: [-hw * 3, -hw, -hw, hw, hw, hw * 3], y: [1, 1, 1 - d, 1 - d, 1, 1], line: { color: css("--muted"), width: 1, dash: "dot" }, hoverinfo: "skip" },
   ], layoutBase({ margin: { l: 8, r: 8, t: 4, b: 18 }, xaxis: { showticklabels: true, tickfont: { size: 9 } },
     yaxis: { showticklabels: false, range: yRange(c.plots.fold.by, d) } }), { ...plotCfg, displayModeBar: false, staticPlot: true }));
 
   Plotly.react("plotOE", [
-    { type: "scatter", mode: "markers+lines", name: "odd", x: c.plots.odd.x, y: c.plots.odd.y, marker: { size: 5, color: "#6cb6ff" }, line: { width: 1 } },
-    { type: "scatter", mode: "markers+lines", name: "even", x: c.plots.even.x, y: c.plots.even.y, marker: { size: 5, color: "#ff7eb6" }, line: { width: 1 } },
+    { type: "scatter", mode: "markers+lines", name: "odd", x: c.plots.odd.x, y: c.plots.odd.y, marker: { size: 5, color: "#4e79a7" }, line: { width: 1 } },
+    { type: "scatter", mode: "markers+lines", name: "even", x: c.plots.even.x, y: c.plots.even.y, marker: { size: 5, color: "#e15759" }, line: { width: 1 } },
   ], layoutBase({ showlegend: true, legend: { x: 0.02, y: 0.05, bgcolor: "rgba(0,0,0,0)" }, xaxis: { title: "Hours from mid-transit" },
     yaxis: { range: yRange(c.plots.fold.by, d) } }), plotCfg);
   Plotly.react("plotSec", [
-    { type: "scatter", mode: "markers+lines", x: c.plots.secondary.x, y: c.plots.secondary.y, marker: { size: 5, color: "#ffc163" }, line: { width: 1 } },
+    { type: "scatter", mode: "markers+lines", x: c.plots.secondary.x, y: c.plots.secondary.y, marker: { size: 5, color: "#f28e2b" }, line: { width: 1 } },
   ], layoutBase({ xaxis: { title: "Hours from phase 0.5" }, yaxis: { range: yRange(c.plots.fold.by, d) },
-    shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: { color: "#ffffff33", dash: "dot" } }] }), plotCfg);
+    shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: { color: css("--muted"), dash: "dot" } }] }), plotCfg);
   Plotly.react("plotZoom", [{ type: "scatter", mode: "lines", x: c.plots.zoom.period, y: c.plots.zoom.power, line: { color: col, width: 1 } }],
     layoutBase({ xaxis: { title: "Period (d)", tickformat: ".5f" }, yaxis: { title: "ΔlogL" } }), plotCfg);
 }
@@ -423,7 +437,7 @@ function drawOrbit() {
   for (const p of r.known.planets) {
     if (!p.pl_orbper || r.candidates.some((c) => c.match.name === p.pl_name)) continue;
     const a = Math.cbrt((r.target.mass || 1) * (p.pl_orbper / 365.25) ** 2);
-    bodies.push({ a, P: p.pl_orbper, rp: p.pl_rade || 2, color: "#5a6f92", label: `${p.pl_name} (known)`, dim: true, phase0: Math.random() * 6.28 });
+    bodies.push({ a, P: p.pl_orbper, rp: p.pl_rade || 2, color: css("--point"), label: `${p.pl_name} (known)`, dim: true, phase0: Math.random() * 6.28 });
   }
   const sc = teffColor(r.target.teff || 5772);
   const t0 = performance.now();
@@ -436,7 +450,7 @@ function drawOrbit() {
     ctx.clearRect(0, 0, W, H);
     const R = Math.min(W, H * 2.6) * 0.42, starR = 22 * dpr;
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, starR * 4);
-    g.addColorStop(0, `rgba(${sc},0.55)`); g.addColorStop(1, "rgba(0,0,0,0)");
+    g.addColorStop(0, `rgba(${sc},0.35)`); g.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, starR * 4, 0, 7); ctx.fill();
     const sg = ctx.createRadialGradient(cx - starR * .3, cy - starR * .3, 0, cx, cy, starR);
     sg.addColorStop(0, "#fff"); sg.addColorStop(1, `rgb(${sc})`);
@@ -444,15 +458,15 @@ function drawOrbit() {
     const tsec = (now - t0) / 1000;
     for (const b of bodies) {
       const rx = starR * 1.8 + (R - starR * 1.8) * Math.sqrt(b.a) / maxA, ry = rx * 0.38;
-      ctx.strokeStyle = b.dim ? "#22324f" : b.color + "66"; ctx.lineWidth = dpr; ctx.setLineDash(b.dim ? [4 * dpr, 4 * dpr] : []);
+      ctx.strokeStyle = b.dim ? css("--line-2") : b.color + "88"; ctx.lineWidth = dpr; ctx.setLineDash(b.dim ? [4 * dpr, 4 * dpr] : []);
       ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
       const ang = b.phase0 + tsec * 0.9 * (minP / b.P);
       const x = cx + rx * Math.cos(ang), y = cy + ry * Math.sin(ang);
       const pr = Math.max(2.5, Math.min(9, 2 + Math.sqrt(b.rp) * 1.6)) * dpr;
       const behind = Math.sin(ang) < 0 && Math.hypot(x - cx, (y - cy) / 0.38) < starR * 1.2;
       if (!behind) {
-        ctx.fillStyle = b.dim ? "#3a4d70" : b.color; ctx.beginPath(); ctx.arc(x, y, pr, 0, 7); ctx.fill();
-        ctx.fillStyle = b.dim ? "#5a6f92" : "#c8d4e8"; ctx.font = `${11 * dpr}px JetBrains Mono`;
+        ctx.fillStyle = b.dim ? css("--point") : b.color; ctx.beginPath(); ctx.arc(x, y, pr, 0, 7); ctx.fill();
+        ctx.fillStyle = b.dim ? css("--muted") : css("--text"); ctx.font = `${11 * dpr}px IBM Plex Mono`;
         ctx.fillText(b.label, x + pr + 5 * dpr, y + 4 * dpr);
       }
     }
@@ -461,19 +475,6 @@ function drawOrbit() {
   state.orbitRAF = requestAnimationFrame(frame);
 }
 
-/* ---------- starfield ---------- */
-function starfield() {
-  const cv = $("#stars"), ctx = cv.getContext("2d");
-  const draw = () => {
-    cv.width = innerWidth; cv.height = innerHeight; ctx.clearRect(0, 0, cv.width, cv.height);
-    for (let i = 0; i < 260; i++) {
-      ctx.fillStyle = `rgba(200,215,255,${Math.random() * 0.5 + 0.1})`;
-      ctx.fillRect(Math.random() * cv.width, Math.random() * cv.height, Math.random() < .1 ? 1.6 : 0.9, Math.random() < .1 ? 1.6 : 0.9);
-    }
-  };
-  draw(); addEventListener("resize", draw);
-}
-
-starfield(); initSidebar(); refreshJobs(); refreshResults();
+initTheme(); initSidebar(); refreshJobs(); refreshResults();
 if (location.hash.startsWith("#r=")) openResult(decodeURIComponent(location.hash.slice(3))).catch((e) => { console.error(e); toast("Could not open report: " + e.message); show("emptyView"); });
 setInterval(refreshJobs, 2000);
